@@ -1,5 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi import APIRouter, HTTPException, Depends, Header, status
 from pydantic import BaseModel, EmailStr, Field
 from utils.database import users_collection, otps_collection
 from utils.email import generate_otp, send_otp_email
@@ -10,9 +9,10 @@ from utils.security import (
 from utils.logger import log_info, log_error, log_security_event
 from datetime import datetime, timedelta
 import os
+from typing import Optional
 
 router = APIRouter()
-security = HTTPBearer()
+
 
 # ─── Request Models ───────────────────────────────────────────────────────────
 
@@ -61,10 +61,14 @@ class UserResponse(BaseModel):
 
 # ─── Dependencies ─────────────────────────────────────────────────────────────
 
-async def get_current_user(credentials: HTTPAuthCredentials = Depends(security)):
+async def get_current_user(authorization: Optional[str] = Header(None)):
     """Verify JWT token and return user email"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+    
+    token = authorization.replace("Bearer ", "")
     try:
-        payload = verify_token(credentials.credentials)
+        payload = verify_token(token)
         email = payload.get("email")
         if not email:
             raise HTTPException(status_code=401, detail="Invalid token")
